@@ -94,6 +94,7 @@ def detect_skin():
   # get all images that contains invalid sizes
   invalid_images = filter(lambda meta: not validate_dimension(meta['inst'], im_width, im_height), cv_im_instances) # pylint: disable=W0110
 
+  # throw some error when there are images that does not contain the right dimensions
   num_invalid_mages = len(invalid_images)
   if num_invalid_mages > 0:
     raise InvalidDimensionsException("Some of the images contains dimensions other than %sx%s" % (im_width, im_height))
@@ -108,7 +109,7 @@ def detect_skin():
     # convert the image to HSV color space
     hsv = cv2.cvtColor(inst, cv2.COLOR_BGR2HSV)
 
-    # create a binrary image mask based on the lower and upper boundaries of the color range
+    # create a binary image mask based on the lower and upper boundaries of the color range
     blur = cv2.GaussianBlur(hsv, (3, 3), 0)
     mask = cv2.inRange(blur, lower_boundary, upper_boundary)
 
