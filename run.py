@@ -30,6 +30,14 @@ class DirectoryNotFoundException(Exception):
     # save the message of the exception
     self.msg = msg
 
+class InvalidDimensionsException(Exception):
+  def __init__(self, msg):
+    # call the parent class init function
+    Exception.__init__(self, msg)
+
+    # save the message of the exception
+    self.msg = msg
+
 def get_images(source_directory, **kwargs):
   # set default values for keyword arguments
   extensions = kwargs.get('extensions', ['jpg', 'png'])
@@ -50,12 +58,19 @@ def get_images(source_directory, **kwargs):
 
   return images
 
-# TODO: perform some checking on image size and resize them according to the size
-#       800x450 with some aspect ratio of 16:9
+def validate_dimension(im, width, height):
+  im_height, im_width, _ = im.shape
+
+  return height == im_height and width == im_width
+
 def detect_skin():
   # boundaries of possible skin in HSV color space
   lower_boundary = np.array([0, 48, 120], dtype="uint8")
   upper_boundary = np.array([20, 255, 255], dtype="uint8")
+
+  # define image dimensions
+  im_width = 800
+  im_height = 450
 
   # resolve the path to the folder of source images and fetch all images
   directory = os.path.join(os.getcwd(), "assets/img/contribs")
@@ -76,15 +91,22 @@ def detect_skin():
   # convert all images to opencv matrices
   cv_im_instances = [{'path': image, 'inst': cv2.imread(image)} for image in images]
 
+  # get all images that contains invalid sizes
+  invalid_images = filter(lambda meta: not validate_dimension(meta['inst'], im_width, im_height), cv_im_instances) # pylint: disable=W0110
+
+  num_invalid_mages = len(invalid_images)
+  if num_invalid_mages > 0:
+    raise InvalidDimensionsException("Some of the images contains dimensions other than %sx%s" % (im_width, im_height))
+
   for cv_im_idx, meta in enumerate(cv_im_instances):
     # destructure the dictionary
-    inst = map(meta.get, ('inst'))
+    path, inst = map(meta.get, ('path', 'inst')) # pylint: disable=W0612
 
     # get the dimensions of the image
     rows, cols, _ = inst.shape
 
     # convert the image to HSV color space
-    hsv = cv2.cvtColor(meta['inst'], cv2.COLOR_BGR2HSV)
+    hsv = cv2.cvtColor(inst, cv2.COLOR_BGR2HSV)
 
     # create a binrary image mask based on the lower and upper boundaries of the color range
     blur = cv2.GaussianBlur(hsv, (3, 3), 0)
