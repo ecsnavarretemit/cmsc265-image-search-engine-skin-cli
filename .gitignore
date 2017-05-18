@@ -109,6 +109,9 @@ data
 _scripts
 sarai-maps-api.wsgi
 
+# ctags
+.tags
+
 # sample images
 assets/*
 
