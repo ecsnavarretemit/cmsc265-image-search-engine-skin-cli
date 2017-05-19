@@ -125,7 +125,7 @@ def detect_skin():
     good_contours = filter(lambda contour: cv2.contourArea(contour) > 1000, contours) # pylint: disable=W0110
 
     # create a new mask based on the shape of the original mask detected
-    # and draw highlight the contours detected
+    # and draw highlight on the contours detected
     mask_bitmask = np.zeros(mask.shape, dtype=mask.dtype)
     for contour_idx, _ in enumerate(good_contours):
       cv2.drawContours(mask_bitmask, good_contours, contour_idx, (255, 255, 255), cv2.FILLED)
