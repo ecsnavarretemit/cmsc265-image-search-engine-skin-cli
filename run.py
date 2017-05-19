@@ -65,10 +65,6 @@ def validate_dimension(im, width, height):
   return height == im_height and width == im_width
 
 def detect_skin():
-  # boundaries of possible skin in HSV color space
-  lower_boundary = np.array([0, 48, 120], dtype="uint8")
-  upper_boundary = np.array([20, 255, 255], dtype="uint8")
-
   # define image dimensions
   im_width = 800
   im_height = 450
@@ -103,24 +99,46 @@ def detect_skin():
   for cv_im_idx, meta in enumerate(cv_im_instances):
     # destructure the dictionary
     path, inst = map(meta.get, ('path', 'inst')) # pylint: disable=W0612
+    mask = cv2.cvtColor(inst.copy(), cv2.COLOR_BGR2GRAY)
 
     # get the dimensions of the image
-    rows, cols, _ = inst.shape
+    height, width, _ = inst.shape
 
     # convert the image to HSV color space
     hsv = cv2.cvtColor(inst, cv2.COLOR_BGR2HSV)
 
-    # create a binary image mask based on the lower and upper boundaries of the color range
-    blur = cv2.GaussianBlur(hsv, (3, 3), 0)
-    mask = cv2.inRange(blur, lower_boundary, upper_boundary)
+    # loop each pixel and determine if the pixel is skin or not based on the
+    # combination of condition for RGB and HSV values stated in
+    # <http://www.syssec-project.eu/m/page-media/3/sfcs14_platzer_skin_sheriff.pdf>
+    #
+    # NOTE: this method is slow
+    for x in range(0, height):
+      for y in range(0, width):
+        pixel_rgb = inst[x, y]
+        blue = pixel_rgb[0]
+        green = pixel_rgb[1]
+        red = pixel_rgb[2]
 
-    # removing noise by ellipse structuring element using erosion and dilation
-    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (1, 1))
-    mask = cv2.erode(mask, kernel, iterations=1)
-    mask = cv2.dilate(mask, kernel, iterations=1)
+        pixel_hsv = hsv[x, y]
+        hue = pixel_hsv[0]
+        saturation = pixel_rgb[1]
+        value = pixel_hsv[2]
 
-    # get all contours present on the mask
-    _, contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        # disassemble condition for readability
+        rgb_cond_1 = red > 220 and green > 210 and blue > 170 and abs(red - green) > 15 and red > blue and green > blue
+        rgb_cond_2_1 = red > 95 and green > 40 and blue > 20 and (max(red, green, blue) - min(red, green, blue) > 15)
+        rgb_cond_2_2 = abs(red - green) > 15 and red > green and red > blue
+        rgb_cond = rgb_cond_1 or (rgb_cond_2_1 and rgb_cond_2_2)
+
+        hsv_cond = ((hue >= 0 and hue <= 50) or (hue >= 340 and hue <= 360)) and saturation > 51 and value > 89
+
+        # determine if the pixel should be black or white
+        if rgb_cond and hsv_cond:
+          mask[x, y] = 255
+        else:
+          mask[x, y] = 0
+
+    _, contours, _ = cv2.findContours(mask, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
 
     # get only the contours greater than 1000 areas
     good_contours = filter(lambda contour: cv2.contourArea(contour) > 1000, contours) # pylint: disable=W0110
@@ -132,12 +150,17 @@ def detect_skin():
       cv2.drawContours(mask_bitmask, good_contours, contour_idx, (255, 255, 255), cv2.FILLED)
       cv2.drawContours(inst, good_contours, contour_idx, (0, 255, 0), 2)
 
+    # removing noise by ellipse structuring element using erosion and dilation
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (1, 1))
+    mask = cv2.erode(mask, kernel, iterations=1)
+    mask = cv2.dilate(mask, kernel, iterations=1)
+
     # remove the unnecessary contours on the original mask by performing
     # bitwise and operation using the original mask and the create bitmask
     bitwised_mask = cv2.bitwise_and(mask, mask_bitmask)
 
     # compute for the percentage of the possible detected skin
-    percent = (float(cv2.countNonZero(bitwised_mask)) / (rows * cols)) * 100
+    percent = (float(cv2.countNonZero(bitwised_mask)) / (height * width)) * 100
 
     # save the file to the filesystem
     filename = "%s/p%.2f-%s.jpg" % (out_directory, percent, str(cv_im_idx).rjust(4, '0'))
