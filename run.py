@@ -113,9 +113,6 @@ def detect_skin():
     blur = cv2.GaussianBlur(hsv, (3, 3), 0)
     mask = cv2.inRange(blur, lower_boundary, upper_boundary)
 
-    # compute for the percentage of the possible detected skin
-    percent = (float(cv2.countNonZero(mask)) / (rows * cols)) * 100
-
     # removing noise by ellipse structuring element using erosion and dilation
     kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (1, 1))
     mask = cv2.erode(mask, kernel, iterations=1)
@@ -124,12 +121,22 @@ def detect_skin():
     # get all contours present on the mask
     _, contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
-    for contour_idx, contour in enumerate(contours):
-      area = cv2.contourArea(contour)
+    # get only the contours greater than 1000 areas
+    good_contours = filter(lambda contour: cv2.contourArea(contour) > 1000, contours) # pylint: disable=W0110
 
-      # draw borders on the detected contour if the area of the contour is greater than 1000
-      if area > 1000:
-        cv2.drawContours(inst, contours, contour_idx, (0, 255, 0), 2)
+    # create a new mask based on the shape of the original mask detected
+    # and draw highlight the contours detected
+    mask_bitmask = np.zeros(mask.shape, dtype=mask.dtype)
+    for contour_idx, _ in enumerate(good_contours):
+      cv2.drawContours(mask_bitmask, good_contours, contour_idx, (255, 255, 255), cv2.FILLED)
+      cv2.drawContours(inst, good_contours, contour_idx, (0, 255, 0), 2)
+
+    # remove the unnecessary contours on the original mask by performing
+    # bitwise and operation using the original mask and the create bitmask
+    bitwised_mask = cv2.bitwise_and(mask, mask_bitmask)
+
+    # compute for the percentage of the possible detected skin
+    percent = (float(cv2.countNonZero(bitwised_mask)) / (rows * cols)) * 100
 
     # save the file to the filesystem
     filename = "%s/p%.2f-%s.jpg" % (out_directory, percent, str(cv_im_idx).rjust(4, '0'))
