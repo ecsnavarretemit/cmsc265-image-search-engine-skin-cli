@@ -7,7 +7,7 @@
 #   Nelson Tejara <nhtejara@up.edu.ph>
 #
 # Licensed under MIT
-# Version 1.0.0-alpha1
+# Version 1.0.0
 
 import os
 import cv2
